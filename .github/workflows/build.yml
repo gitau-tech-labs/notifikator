@@ -22,7 +22,6 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
           cache-disabled: true
 
       - name: Point Gradle at the preinstalled Android SDK
@@ -34,23 +33,10 @@ jobs:
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Grant execute permission for gradlew
-        run: |
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            echo "Using wrapper"
-            echo "USE_WRAPPER=true" >> $GITHUB_ENV
-          else
-            echo "No wrapper found, will use system gradle"
-            echo "USE_WRAPPER=false" >> $GITHUB_ENV
-          fi
+        run: chmod +x gradlew
 
       - name: Build debug APK
-        run: |
-          if [ "$USE_WRAPPER" = "true" ]; then
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            gradle assembleDebug --no-daemon --stacktrace
-          fi
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
