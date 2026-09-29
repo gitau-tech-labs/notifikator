@@ -20,7 +20,7 @@ import net.kzxiv.notify.client.HttpTransportService;
 public class ForwarderService extends Service {
 
     private static final int NOTIF_ID = 7777;
-    private static final long TICK_INTERVAL_MS = 30_000L;
+    private static final long TICK_INTERVAL_MS = 10_000L;
     private static final String CHANNEL_ID = "forwarder_service";
 
     private Handler handler;
