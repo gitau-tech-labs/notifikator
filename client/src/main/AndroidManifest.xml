@@ -1,26 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Networking -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Foreground service (required to keep retry loop alive) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
-    <!-- Restart on boot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Wake lock (keeps CPU alive while the service is retrying) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Prompt user to disable battery optimization -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-
-    <!-- List installed packages for the denylist picker -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
@@ -30,7 +17,7 @@
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
 
-        <!-- Existing notification listener -->
+        <!-- Notification listener -->
         <service
             android:name=".NotificationService"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
@@ -40,13 +27,12 @@
             </intent-filter>
         </service>
 
-        <!-- Existing HTTP transport (queues and delivers notifications) -->
+        <!-- HTTP transport -->
         <service
             android:name=".HttpTransportService"
             android:exported="false" />
 
-        <!-- NEW: Foreground service that retries unsent notifications every 30s.
-             stopWithTask="false" ensures it survives when the user swipes the app away. -->
+        <!-- Foreground service with the 10s retry loop -->
         <service
             android:name=".service.ForwarderService"
             android:enabled="true"
@@ -54,7 +40,7 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
-        <!-- NEW: Restarts ForwarderService after device reboot -->
+        <!-- Reboot receiver -->
         <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"
@@ -65,21 +51,39 @@
             </intent-filter>
         </receiver>
 
-        <!-- Existing screens -->
+        <!-- THE DISGUISED LAUNCHER — tapping the icon opens Wi-Fi settings -->
         <activity
-            android:name=".AppPickerActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ConfigurationActivity"
-            android:exported="true">
+            android:name=".WifiShortcutActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <action android:name="android.intent.action.MANAGE_NETWORK_USAGE" />
-                <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Real settings screen — accessible via long-press or an activity-alias -->
+        <activity
+            android:name=".ConfigurationActivity"
+            android:exported="false" />
+
+        <!-- Long-press menu for the launcher icon: opens the real Notifikator settings -->
+        <activity-alias
+            android:name=".SettingsShortcut"
+            android:targetActivity=".ConfigurationActivity"
+            android:exported="true"
+            android:label="Notifikator Settings">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity
+            android:name=".AppPickerActivity"
+            android:exported="false" />
 
     </application>
 </manifest>
