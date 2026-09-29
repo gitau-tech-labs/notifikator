@@ -1,6 +1,5 @@
 package net.kzxiv.notify.client;
 
-
 import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -13,14 +12,18 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.provider.Settings;
 import android.widget.Toast;
+
+import net.kzxiv.notify.client.service.ForwarderService;
 
 public class ConfigurationActivity extends PreferenceActivity
 {
@@ -40,6 +43,20 @@ public class ConfigurationActivity extends PreferenceActivity
         if (!isNotificationListenerEnabled()) {
             Toast.makeText(this, R.string.notification_access_required, Toast.LENGTH_LONG).show();
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+        }
+
+        // Start the foreground forwarder service (30s retry loop)
+        ForwarderService.start(this);
+
+        // Ask user once to disable battery optimization for reliable background delivery
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } catch (Exception ignored) {
+            }
         }
 
         Preference manageDenylistButton = findPreference(getString(R.string.key_manage_denylist));
@@ -72,9 +89,7 @@ public class ConfigurationActivity extends PreferenceActivity
             nb.setLargeIcon(largeIconBitmap);
 
             // `VERSION_CODES.O` means SDK 26
-            // Thanks Google, very readable
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                // notification channel setup
                 NotificationChannel mChannel = null;
                 mChannel = new NotificationChannel(CHANNEL_ID, CHANNEL_ID, NotificationManager.IMPORTANCE_LOW);
                 mChannel.setDescription("");
