@@ -1,112 +1,113 @@
-package net.kzxiv.notify.client.service
+package net.kzxiv.notify.client.service;
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.content.Context
-import android.content.Intent
-import android.os.Build
-import android.os.IBinder
-import android.os.PowerManager
-import androidx.core.app.NotificationCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import net.kzxiv.notify.client.ConfigurationActivity
-import net.kzxiv.notify.client.HttpTransportService
-import net.kzxiv.notify.client.NotificationService
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.PowerManager;
+import androidx.core.app.NotificationCompat;
 
-class ForwarderService : Service() {
+import net.kzxiv.notify.client.ConfigurationActivity;
+import net.kzxiv.notify.client.HttpTransportService;
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var ticker: Job? = null
-    private var wakeLock: PowerManager.WakeLock? = null
+public class ForwarderService extends Service {
 
-    override fun onCreate() {
-        super.onCreate()
-        startForeground(NOTIF_ID, buildNotification())
+    private static final int NOTIF_ID = 7777;
+    private static final long TICK_INTERVAL_MS = 30_000L;
+    private static final String CHANNEL_ID = "forwarder_service";
 
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Notifikator::ForwarderWakeLock").apply {
-            setReferenceCounted(false)
-            acquire()
+    private Handler handler;
+    private Runnable ticker;
+    private PowerManager.WakeLock wakeLock;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        startForeground(NOTIF_ID, buildNotification());
+
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm != null) {
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Notifikator::ForwarderWakeLock");
+            wakeLock.setReferenceCounted(false);
+            wakeLock.acquire();
         }
 
-        // 30-second retry loop
-        ticker = scope.launch {
-            while (isActive) {
+        handler = new Handler(Looper.getMainLooper());
+        ticker = new Runnable() {
+            @Override
+            public void run() {
                 try {
-                    // Ask the notification service to flush anything unsent.
-                    // We start the existing HttpTransportService which already
-                    // knows how to deliver queued payloads.
-                    val transport = Intent(this@ForwarderService, HttpTransportService::class.java)
-                    transport.putExtra("force_flush", true)
-                    startService(transport)
-
-                    LogStore.append(this@ForwarderService, "TICK forced flush requested")
-                } catch (e: Exception) {
-                    LogStore.append(this@ForwarderService, "TICK error: ${e.message}")
+                    Intent transport = new Intent(ForwarderService.this, HttpTransportService.class);
+                    transport.putExtra("force_flush", true);
+                    startService(transport);
+                    LogStore.append(ForwarderService.this, "TICK forced flush requested");
+                } catch (Exception e) {
+                    LogStore.append(ForwarderService.this, "TICK error: " + e.getMessage());
                 }
-                delay(30_000L)
+                handler.postDelayed(this, TICK_INTERVAL_MS);
             }
+        };
+        handler.post(ticker);
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        if (handler != null && ticker != null) {
+            handler.removeCallbacks(ticker);
         }
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+        super.onDestroy();
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
 
-    override fun onDestroy() {
-        ticker?.cancel()
-        wakeLock?.let { if (it.isHeld) it.release() }
-        super.onDestroy()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun buildNotification(): Notification {
-        val channelId = "forwarder_service"
+    private Notification buildNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val chan = NotificationChannel(
-                channelId,
-                "Notification Forwarder",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(chan)
+            NotificationChannel chan = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Notification Forwarder",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.createNotificationChannel(chan);
         }
 
-        val tapIntent = Intent(this, ConfigurationActivity::class.java)
-        val pi = PendingIntent.getActivity(
-            this, 0, tapIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        Intent tapIntent = new Intent(this, ConfigurationActivity.class);
+        int piFlags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
+        PendingIntent pi = PendingIntent.getActivity(this, 0, tapIntent, piFlags);
 
-        return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Notification Forwarder is running")
-            .setContentText("Retrying unsent notifications every 30s")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setOngoing(true)
-            .setContentIntent(pi)
-            .build()
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Notification Forwarder is running")
+                .setContentText("Retrying unsent notifications every 30s")
+                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setOngoing(true)
+                .setContentIntent(pi)
+                .build();
     }
 
-    companion object {
-        private const val NOTIF_ID = 7777
-
-        fun start(context: Context) {
-            val i = Intent(context, ForwarderService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(i)
-            } else {
-                context.startService(i)
-            }
+    public static void start(Context context) {
+        Intent i = new Intent(context, ForwarderService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(i);
+        } else {
+            context.startService(i);
         }
     }
 }
