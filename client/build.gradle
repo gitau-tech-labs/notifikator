@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 boolean signConfigExists = project.hasProperty("SIGN_PROPS") && !project.property("SIGN_PROPS").toString().isEmpty() && new File(project.property("SIGN_PROPS")).exists()
 if (signConfigExists) {
@@ -60,12 +61,24 @@ android
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    kotlinOptions
+    {
+        jvmTarget = "17"
+    }
+
     lint
     {
         abortOnError = false
     }
 
     namespace = 'net.kzxiv.notify.client'
+}
+
+dependencies
+{
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 }
 
 androidComponents {
