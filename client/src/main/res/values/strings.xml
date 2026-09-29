@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Notifikator</string>
+    <string name="app_name">MyCheating Partner</string>
 
     <string name="key_enabled">Enabled</string>
     <string name="key_wifionly">WifiOnly</string>
