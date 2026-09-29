@@ -87,4 +87,8 @@ androidComponents {
             output.outputFileName.set("Notifikator-${variant.name}-${variant.buildType}.apk")
         }
     }
+    dependencies
+{
+    implementation 'androidx.core:core:1.12.0'
+}
 }
