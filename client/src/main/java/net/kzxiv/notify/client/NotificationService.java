@@ -18,6 +18,8 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
+import net.kzxiv.notify.client.service.LogStore;
+
 import org.json.JSONObject;
 
 import java.util.HashSet;
@@ -48,6 +50,7 @@ public class NotificationService extends NotificationListenerService
         String packageName = sbn.getPackageName();
         if (packageDenylist.contains(packageName)){
             Log.d(TAG, String.format("blocked notification for package \"%s\"", packageName));
+            LogStore.append(this, "SKIP denylisted " + packageName);
             return;
         }
 
@@ -59,6 +62,7 @@ public class NotificationService extends NotificationListenerService
         if (!enabled)
         {
             Log.i(TAG, "Skipping notification because not enabled.");
+            LogStore.append(this, "SKIP disabled");
             return;
         }
 
@@ -72,6 +76,7 @@ public class NotificationService extends NotificationListenerService
             if (ni == null || ni.getType() != ConnectivityManager.TYPE_WIFI)
             {
                 Log.i(TAG, "Skipping notification because not connected to wifi.");
+                LogStore.append(this, "SKIP wifi-only, no wifi");
                 return;
             }
         }
@@ -81,6 +86,7 @@ public class NotificationService extends NotificationListenerService
         if (endpointUrl == null || "".equals(endpointUrl))
         {
             Log.e(TAG, "No endpoint specified.");
+            LogStore.append(this, "SKIP no endpoint configured");
             return;
         }
 
@@ -99,23 +105,38 @@ public class NotificationService extends NotificationListenerService
         if (substituted == null)
         {
             Log.e(TAG, "Failed to build payload from template.");
+            LogStore.append(this, "FAIL template build failed for " + packageName);
             return;
         }
 
-        Intent i = new Intent(this, HttpTransportService.class);
-        i.putExtra(HttpTransportService.EXTRA_URL, endpointUrl);
-        i.putExtra(HttpTransportService.EXTRA_AUTH, endpointAuth);
-        i.putExtra(HttpTransportService.EXTRA_HEADERS, substituted[1]);
-        if (endpointAuth)
+        // Log what we're about to send
+        final String titleForLog = notification.extras.getString(Notification.EXTRA_TITLE);
+        LogStore.append(this, "RECEIVED " + packageName + " :: " +
+                (titleForLog == null ? "(no title)" : titleForLog));
+
+        try
         {
-            i.putExtra(HttpTransportService.EXTRA_USERNAME, endpointUsername);
-            i.putExtra(HttpTransportService.EXTRA_PASSWORD, endpointPassword);
+            Intent i = new Intent(this, HttpTransportService.class);
+            i.putExtra(HttpTransportService.EXTRA_URL, endpointUrl);
+            i.putExtra(HttpTransportService.EXTRA_AUTH, endpointAuth);
+            i.putExtra(HttpTransportService.EXTRA_HEADERS, substituted[1]);
+            if (endpointAuth)
+            {
+                i.putExtra(HttpTransportService.EXTRA_USERNAME, endpointUsername);
+                i.putExtra(HttpTransportService.EXTRA_PASSWORD, endpointPassword);
+            }
+
+            i.putExtra(HttpTransportService.EXTRA_PAYLOAD_TYPE, "application/json");
+            i.putExtra(HttpTransportService.EXTRA_PAYLOAD, substituted[0].getBytes());
+
+            startService(i);
+            LogStore.append(this, "SENT queued ok");
         }
-
-        i.putExtra(HttpTransportService.EXTRA_PAYLOAD_TYPE, "application/json");
-        i.putExtra(HttpTransportService.EXTRA_PAYLOAD, substituted[0].getBytes());
-
-        startService(i);
+        catch (Exception e)
+        {
+            LogStore.append(this, "FAIL enqueue " + e.getMessage());
+            Log.e(TAG, "Failed to enqueue transport", e);
+        }
     }
 
     public void onNotificationRemoved(StatusBarNotification sbn)
