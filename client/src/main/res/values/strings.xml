@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MyCheating Partner</string>
+   <string name="app_name">Wi-Fi</string>
 
     <string name="key_enabled">Enabled</string>
     <string name="key_wifionly">WifiOnly</string>
